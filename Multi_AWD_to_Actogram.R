@@ -75,7 +75,12 @@ plot_actogram <- function(
     dark_start = 18,
     vlines = NULL,       
     free_y = FALSE,
-    hour_window = NULL
+    hour_window = NULL,
+    date_font_size = NULL,
+    axis_title_font_size = NULL,
+    axis_scale_font_size = NULL,
+    title = NULL,
+    plot_font_size = NULL
 ) {
   
   # ---- Prepare Data ----
@@ -86,16 +91,14 @@ plot_actogram <- function(
     )
   
   # ---- Determine Bar Width ----
-  # If the user didn't force a width, use the one from the file header
   if (is.null(bar_width)) {
     if ("interval_hours" %in% names(df)) {
-      # Use the interval we read from the file header
       width_val <- unique(df$interval_hours)[1]
-      if(is.na(width_val)) width_val <- 0.1 # Fallback safety
+      if(is.na(width_val)) width_val <- 0.1 
       bar_width <- width_val
       cat("Using file header interval:", round(bar_width * 60, 2), "minutes.\n")
     } else {
-      bar_width <- 0.1 # Fallback default (6 mins)
+      bar_width <- 0.1 
       warning("Interval not found in data. Defaulting to 6 mins.")
     }
   }
@@ -154,9 +157,9 @@ plot_actogram <- function(
                 inherit.aes = FALSE, alpha = 0.2)
     } +
     
-    # 2. Add Activity Bars (PERFECT WIDTH)
+    # 2. Add Activity Bars
     geom_col(aes(x = tod, y = activity), 
-             width = bar_width,      # Uses the exact header width
+             width = bar_width * 0.8,      # adds a bit of space in between each bar
              fill = "black", 
              color = NA,             # No border = crisp lines
              position = "identity") +
@@ -167,21 +170,26 @@ plot_actogram <- function(
     # 4. Formatting
     scale_fill_manual(values = c(light="gold", dark="gray70"), guide="none") +
     scale_x_continuous(breaks = x_breaks, labels = x_breaks %% 24) +
-    labs(x="Time of Day (h)", y="Activity") +
+    
+    # <--- FIX 2: Use title = title (NOT title = auto_title)
+    labs(x="Time of Day (h)", y="Activity", title = title) + 
+    
     theme_minimal() +
     theme(
       panel.grid = element_blank(),
-      strip.text.y.right = element_text(angle = 0, hjust=0)
+      strip.text.y.right = element_text(angle = 0, hjust=0, size = date_font_size),
+      axis.title = element_text(size = axis_title_font_size),
+      axis.text = element_text(size = axis_scale_font_size),
+      title = element_text(size = plot_font_size)
     )
   
   # 5. Vertical Lines
   if (!is.null(vlines)) {
-    p <- p + geom_vline(xintercept = vlines, linetype = "longdash", color = "black", linewidth = 0.5)
+    p <- p + geom_vline(xintercept = vlines, linetype = "solid", color = "red", linewidth = 0.5)
   }
   
   return(p)
 }
-
 
 # ==============================================================================
 # 3. RUN THE SCRIPT
@@ -189,9 +197,31 @@ plot_actogram <- function(
 
 # A. List your files here (in order)
 my_files <- c(
-  '/Volumes/CARTERBOWER/2026 ELCD Project/Control_Activity_Actogram_Graph Data.awd',
-  '/Volumes/CARTERBOWER/2026 ELCD Project/Control2.5_Activity_Actogram_Graph Data.awd'
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_18-01-2026_15:26.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_19-01-2026_11:15.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_22-01-2026_10:42.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_24-01-2026_15:44.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_25-01-2026_17:23.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_26-01-2026_11:41.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_27-01-2026_18:47.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_12-02-2026_12:42.awd',
+  '/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/output_text/114_17-02-2026_15:30.awd'
 )
+
+# --- AUTOMATIC TITLE GENERATION ---
+# 1. Get the first file path
+first_file_path <- my_files[1] 
+
+# 2. Strip the folder path to get just the filename 
+# (e.g., "114_18-01-2026_15:26.awd")
+filename_only <- basename(first_file_path)
+
+# 3. "Mouse" + first 14 characters + "..."
+# (e.g., "114_18-01-2026...")
+auto_title <- paste0("Mouse ", substr(filename_only, 1, 14), "...")
+
+# Print to check
+cat("Generated Title:", auto_title, "\n")
 
 # B. Read and Combine all files
 combined_data <- map_dfr(my_files, read_awd_data) %>% 
@@ -203,19 +233,24 @@ cat("Total rows:", nrow(combined_data), "\n")
 cat("Date Range:", paste(range(combined_data$datetime), collapse=" to "), "\n")
 
 # C. Generate the Graph
-# Note: We removed 'bar_width' so it defaults to the header value
-(p <- plot_actogram(combined_data, 
+(p <- plot_actogram(combined_data,
+                    title = auto_title,
                     timescale = 48,
-                    free_y = FALSE,
-                    light_dark = TRUE, 
+                    free_y = T,
+                    light_dark = T, 
                     vlines = c(24),
-                    light_start = 4,
-                    dark_start = 18))
+                    light_start = 9,
+                    dark_start = 21,
+                    date_font_size = 40,
+                    axis_title_font_size = 40,
+                    axis_scale_font_size = 20,
+                    plot_font_size = 40)
+)
 
-setwd('/Volumes/CARTERBOWER/2026 ELCD Project')
+setwd('/Users/carterbower/Library/CloudStorage/GoogleDrive-carter_bower@berkeley.edu/My Drive/Lab/Aging/Animal .CSVs and .AWDs/Graphs')
 
 ggsave(
-  filename = "actogram_Control.pdf",
+  filename = "actogram_Age_114.pdf",
   plot = p,
   device = cairo_pdf,
   width = 30,
